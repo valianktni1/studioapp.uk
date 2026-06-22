@@ -40,7 +40,6 @@ services:
       - SUPERADMIN_PASSWORD=IjWVoHpdtdZKXUif
     volumes:
       - /mnt/photographers_data/photographers_upload_data/emma_lou_photography:/data/userfiles
-      - /mnt/photographers_data/photographers_backup/emma_lou_photography:/backup
     depends_on:
       mongodb:
         condition: service_healthy

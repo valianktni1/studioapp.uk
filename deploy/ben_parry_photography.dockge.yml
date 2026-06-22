@@ -50,7 +50,6 @@ services:
       - SUPERADMIN_PASSWORD=ABf37_jPCsF8oY1Q                            # <<<<<
     volumes:
       - /mnt/photographers_data/photographers_upload_data/ben_parry_photography:/data/userfiles   # <<<<<
-      - /mnt/photographers_data/photographers_backup/ben_parry_photography:/backup                # <<<<<
     depends_on:
       mongodb:
         condition: service_healthy
