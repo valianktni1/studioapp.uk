@@ -1,0 +1,67 @@
+{
+  "summary": "Tested the white-label branding feature end-to-end on a fresh DB. Backend: 16/16 branding/auth/share tests pass (setup wizard, public GET /api/settings, PUT /api/admin/settings with auth + invalid hex rejection, logo POST/GET/DELETE, share creation, login). Frontend UI: setup wizard at /admin works with the required testids and lands on /admin/dashboard; dashboard shows business name 'Aurora Studios' + platform-footer; Settings → Branding tab is default, pre-fills, saving updates --brand CSS var and persists across reload; logo upload + remove work; login page + share page (/s/<token>) both show the business name and the fixed platform credit footer; CSS --brand propagates to share page. Existing admin login (admin/test123) still works after setup. However, real white-label leakage exists via the fallback assets — see critical findings.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "BrandingProvider / logoSrc fallback",
+        "issue": "When no custom logo is uploaded, every page (login, dashboard, settings, share view, guest upload) renders the static file /app/frontend/public/logo.png as the header logo. That file is the original 'Weddings By Mark' handwritten-signature image, so any client visiting a fresh white-label tenant's share gallery sees the original brand. The branding code paths are correct (logoSrc falls back to '/logo.png'), but the fallback asset itself is brand-specific and must be replaced with a generic neutral placeholder (or a wordmark generated from business_name).",
+        "selector": "img[alt=\"Aurora Studios\"] in dashboard/share headers",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "ShareView watermark",
+        "issue": "ShareView.js line 44: watermarkSrc = branding.has_custom_logo ? logoSrc : '/watermark-logo.png'. /app/frontend/public/watermark-logo.png is again the 'Weddings By Mark' signature, so client photos are watermarked with the original brand whenever the photographer hasn't uploaded a logo. Replace with neutral default or skip watermark when has_custom_logo is false.",
+        "selector": "ShareView image watermark overlay",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "ShareView.js",
+        "issue": "Hardcoded email mark@perfectweddingsbymark.uk on line 1044 (the 'I'm sorry…' help block) has NO fallback to branding.contact_email — line 476 uses the fallback correctly, but 1044 is a literal string. White-label tenants will leak the original photographer's email.",
+        "selector": "ShareView.js:1044 mailto link",
+        "priority": "HIGH"
+      },
+      {
+        "component": "ShareView 'Your Wedding Album' instructions",
+        "issue": "Hardcoded instructional text 'Your Wedding Album (If Included in Your Package)' with Mark-specific wording (album favourites flow, gold heart, '40 favourites') is rendered to every white-label tenant's clients. Make this either configurable per-tenant or generic.",
+        "selector": "ShareView welcome panel",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_branding.py",
+    "/app/test_reports/pytest/branding_results.xml"
+  ],
+  "action_items": [
+    "Replace /app/frontend/public/logo.png with a neutral white-label placeholder (or render a text wordmark from branding.business_name when has_custom_logo is false) so the original 'Weddings By Mark' signature does not appear on any unconfigured tenant's pages.",
+    "Replace /app/frontend/public/watermark-logo.png with a neutral default, or skip watermarking entirely when has_custom_logo is false.",
+    "ShareView.js:1044 — use branding.contact_email (with a generic fallback like 'your photographer') instead of the hardcoded mark@perfectweddingsbymark.uk.",
+    "Make ShareView.js 'Your Wedding Album' instructional block configurable per-tenant (or remove the Mark-specific wording) so it does not appear verbatim on every tenant's client galleries."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 3105 lines — strongly consider splitting (routers per resource, services for FFmpeg/branding) for maintainability.",
+    "Branding fallback logic in branding.js is clean and the BrandingProvider correctly sets --brand and --brand-rgb CSS vars on document root; document.title also updates from business_name. Good.",
+    "build_branding_response() correctly excludes _id and returns a stable public shape including platform_credit; PUT validates hex with regex and rejects bad input with 400.",
+    "Setup endpoint is idempotent (second call → 400). Login still works post-setup. Auth guard on PUT/POST/DELETE branding endpoints is enforced.",
+    "Hardcoded brand assets and strings (logo.png, watermark-logo.png, ShareView email/instructions) are the only place where the white-label promise is broken — backend/contract is solid."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_branding.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% on tested flows (wizard → dashboard → settings → logo → login → share). Brand-leakage findings above are content-asset issues, not flow failures."
+  },
+  "test_credentials": "admin / test123 (created via wizard with business_name=Aurora Studios, accent=#7C3AED). DB reset to empty during testing then re-seeded by the wizard.",
+  "seed_data_creation": "Wizard-created admin (Aurora Studios). A TEST_UI_Share2 gallery + no-password share were created during UI testing and have been deleted afterwards. No leftover TEST_ data.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "DB has been left with admin user 'admin'/'test123' and business_name='Aurora Studios', accent_color='#22C55E' (the UI test saved that value as part of its happy path). No galleries remain. Re-run backend tests with: pytest /app/backend/tests/test_branding.py -v. To re-test the wizard UI itself you'll need to wipe db.admins/db.settings/db.templates first.",
+  "rca of the issue": "White-label leakage RCA: the new BrandingProvider correctly resolves logoSrc to '/logo.png' (and ShareView's watermark to '/watermark-logo.png') when has_custom_logo is false. Both files in /app/frontend/public/ are still the original Weddings By Mark signature PNGs. ShareView also embeds the original photographer's email and Mark-specific 'wedding album favourites' instructions directly in the JSX. Mitigation: swap the two PNGs for neutral defaults (or render a CSS/SVG wordmark from branding.business_name when no custom logo), replace the hardcoded mailto on line 1044 with branding.contact_email, and parameterise (or remove) the Mark-specific instructional copy in ShareView."
+}

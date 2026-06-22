@@ -1,0 +1,144 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=Manrope:wght@200;300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand: #D4AF37;
+    --brand-rgb: 212, 175, 55;
+    --background: 40 33% 98%;
+    --foreground: 24 10% 10%;
+    --card: 40 33% 98%;
+    --card-foreground: 24 10% 10%;
+    --popover: 40 33% 98%;
+    --popover-foreground: 24 10% 10%;
+    --primary: 24 10% 10%;
+    --primary-foreground: 40 33% 98%;
+    --secondary: 33 18% 93%;
+    --secondary-foreground: 24 10% 10%;
+    --muted: 33 18% 93%;
+    --muted-foreground: 24 6% 44%;
+    --accent: 43 76% 52%;
+    --accent-foreground: 24 10% 10%;
+    --destructive: 346 77% 35%;
+    --destructive-foreground: 40 33% 98%;
+    --border: 33 12% 86%;
+    --input: 33 12% 86%;
+    --ring: 43 76% 52%;
+    --radius: 0.125rem;
+    --chart-1: 43 76% 52%;
+    --chart-2: 33 30% 60%;
+    --chart-3: 24 10% 10%;
+    --chart-4: 33 18% 93%;
+    --chart-5: 346 77% 35%;
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Manrope', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #FDFCF8;
+  color: #1C1917;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Cormorant Garamond', serif;
+}
+
+::selection {
+  background-color: rgba(var(--brand-rgb), 0.25);
+  color: #1C1917;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F5F2EB;
+}
+::-webkit-scrollbar-thumb {
+  background: #A8A29E;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #78716C;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer base {
+  [data-debug-wrapper="true"] {
+    display: contents !important;
+  }
+}
+
+/* Masonry layout */
+.masonry-grid {
+  columns: 1;
+  column-gap: 1rem;
+}
+@media (min-width: 640px) {
+  .masonry-grid { columns: 2; }
+}
+@media (min-width: 1024px) {
+  .masonry-grid { columns: 3; }
+}
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+}
+
+/* Lightbox overlay */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Noise texture overlay */
+.noise-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+
+/* Video.js player overrides for lightbox */
+.video-js {
+  background-color: black;
+  max-height: 85vh;
+}
+.video-js .vjs-big-play-button {
+  border-color: rgba(var(--brand-rgb), 0.8);
+  background-color: rgba(0, 0, 0, 0.5);
+}
+.video-js .vjs-play-progress,
+.video-js .vjs-volume-level {
+  background-color: var(--brand);
+}
+.video-js .vjs-control-bar {
+  background: rgba(0, 0, 0, 0.7);
+}
