@@ -3110,6 +3110,25 @@ async def admin_reset_password(data: ResetPasswordRequest):
     )
     return {"message": "Password updated successfully. You can now sign in."}
 
+class UpdateEmailRequest(BaseModel):
+    email: str
+
+@api_router.get("/admin/profile")
+async def admin_get_profile(admin=Depends(get_admin)):
+    doc = await db.admins.find_one({"id": admin["sub"]}, {"_id": 0, "username": 1, "email": 1, "display_name": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"username": doc.get("username"), "email": doc.get("email", ""), "display_name": doc.get("display_name", "")}
+
+@api_router.put("/admin/email")
+async def admin_update_email(data: UpdateEmailRequest, admin=Depends(get_admin)):
+    email = data.email.strip().lower()
+    import re
+    if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address")
+    await db.admins.update_one({"id": admin["sub"]}, {"$set": {"email": email}})
+    return {"email": email, "message": "Reset email updated"}
+
 # ─── White-Label Branding Settings ───
 BRANDING_DIR = UPLOAD_DIR / ".branding"
 BRANDING_DIR.mkdir(parents=True, exist_ok=True)

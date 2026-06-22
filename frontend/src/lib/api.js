@@ -69,6 +69,8 @@ export const uploadLogo = (file) => {
 export const deleteLogo = () => apiClient.delete('/admin/settings/logo');
 export const forgotPassword = (data) => apiClient.post('/admin/forgot-password', data);
 export const resetPassword = (data) => apiClient.post('/admin/reset-password', data);
+export const getAdminProfile = () => apiClient.get('/admin/profile');
+export const updateAdminEmail = (email) => apiClient.put('/admin/email', { email });
 
 // Super Admin (platform owner)
 export const superAdminLogin = (data) => apiClient.post('/superadmin/login', data);

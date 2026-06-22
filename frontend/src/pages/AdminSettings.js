@@ -19,7 +19,8 @@ import {
   changePassword, getPrintSizes, createPrintSize, updatePrintSize, deletePrintSize,
   getPrintOrders, updateOrderStatus, getCompressionSetting, setCompressionSetting,
   get2FAStatus, setup2FA, enable2FA, disable2FA,
-  getSettings, updateSettings, uploadLogo, deleteLogo
+  getSettings, updateSettings, uploadLogo, deleteLogo,
+  getAdminProfile, updateAdminEmail
 } from "@/lib/api";
 import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
@@ -37,6 +38,8 @@ export default function AdminSettings() {
   const [savingBranding, setSavingBranding] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [hasCustomLogo, setHasCustomLogo] = useState(false);
+  const [accountEmail, setAccountEmail] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
 
   // Password change
   const [passwordForm, setPasswordForm] = useState({
@@ -85,6 +88,7 @@ export default function AdminSettings() {
 
   const loadBranding = async () => {
     setLoadingBranding(true);
+    loadProfile();
     try {
       const res = await getSettings();
       setBrandingForm({
@@ -96,6 +100,26 @@ export default function AdminSettings() {
       setHasCustomLogo(res.data.has_custom_logo);
     } catch { toast.error("Failed to load branding settings"); }
     finally { setLoadingBranding(false); }
+  };
+
+  const loadProfile = async () => {
+    try {
+      const res = await getAdminProfile();
+      setAccountEmail(res.data.email || "");
+    } catch { /* non-blocking */ }
+  };
+
+  const handleSaveEmail = async () => {
+    setSavingEmail(true);
+    try {
+      const res = await updateAdminEmail(accountEmail);
+      setAccountEmail(res.data.email);
+      toast.success("Reset email updated");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to update email");
+    } finally {
+      setSavingEmail(false);
+    }
   };
 
   const handleSaveBranding = async () => {
@@ -471,6 +495,29 @@ export default function AdminSettings() {
                     className="bg-[#1C1917] text-[#FDFCF8] rounded-sm px-6 py-2 text-xs tracking-wider uppercase font-bold">
                     {savingBranding ? "Saving..." : "Save Branding"}
                   </Button>
+                </div>
+
+                {/* Account email (password resets) */}
+                <div className="border rounded-sm p-6 space-y-4" style={{ borderColor: 'rgba(var(--brand-rgb),0.15)' }}>
+                  <div className="flex items-center gap-2">
+                    <Key className="w-5 h-5 text-[var(--brand)]" />
+                    <h3 className="text-lg font-medium" style={{ fontFamily: 'Cormorant Garamond, serif' }}>Login &amp; Reset Email</h3>
+                  </div>
+                  <p className="text-sm text-[#57534E]" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                    The email where your password-reset links are sent. Keep this up to date so you can always recover access. (This is private — separate from the public contact email above.)
+                  </p>
+                  <div className="flex items-end gap-3">
+                    <div className="space-y-1.5 flex-1 max-w-sm">
+                      <Label className="text-xs tracking-[0.1em] uppercase font-semibold" style={{ color: '#57534E' }}>Account Email</Label>
+                      <Input data-testid="account-email" type="email" value={accountEmail}
+                        onChange={e => setAccountEmail(e.target.value)}
+                        placeholder="you@yourstudio.com" className="border-[#D4D4D8] rounded-sm" />
+                    </div>
+                    <Button onClick={handleSaveEmail} disabled={savingEmail} data-testid="save-account-email-btn"
+                      className="bg-[#1C1917] text-[#FDFCF8] rounded-sm px-6 py-2 text-xs tracking-wider uppercase font-bold">
+                      {savingEmail ? "Saving..." : "Save Email"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
