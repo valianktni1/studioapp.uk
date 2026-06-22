@@ -1,0 +1,77 @@
+# ============================================================================
+# Dockge stack — CUSTOMER: Emma Lou Photography  (2nd example)
+# Subdomain: emmalou.studioapp.uk  (reverse proxy -> host port 30041)
+#   App/DB data : /mnt/apps/multiple_photographers_app/emma_lou_photography
+#   User files  : /mnt/photographers_data/photographers_upload_data/emma_lou_photography
+# ============================================================================
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: emmalou-mongodb
+    restart: unless-stopped
+    volumes:
+      - /mnt/apps/multiple_photographers_app/emma_lou_photography/mongodb:/data/db
+    networks:
+      - emmalou-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build:
+      context: https://github.com/valianktni1/studioapp.uk.git#main:backend
+    container_name: emmalou-backend
+    restart: unless-stopped
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=emma_lou_photography
+      - CORS_ORIGINS=*
+      - UPLOAD_DIR=/data/userfiles
+      - NGINX_VIDEO_URL=enabled
+      - JWT_SECRET=RTmho7neG56OmLxZ2HTUPDEPdI8OPqvKleNl/Tm3msI=
+      - NGINX_VIDEO_SECRET=14wNf28xQ3/EXshNwpYCsFt3h/hUEBEpGUFkjDdl+X0=
+      - SUPERADMIN_USERNAME=superadmin
+      - SUPERADMIN_PASSWORD=IjWVoHpdtdZKXUif
+    volumes:
+      - /mnt/photographers_data/photographers_upload_data/emma_lou_photography:/data/userfiles
+      - /mnt/photographers_data/photographers_backup/emma_lou_photography:/backup
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - emmalou-network
+
+  nginx-video:
+    build:
+      context: https://github.com/valianktni1/studioapp.uk.git#main:nginx
+    container_name: emmalou-nginx-video
+    restart: unless-stopped
+    environment:
+      - NGINX_VIDEO_SECRET=14wNf28xQ3/EXshNwpYCsFt3h/hUEBEpGUFkjDdl+X0=
+    volumes:
+      - /mnt/photographers_data/photographers_upload_data/emma_lou_photography:/uploads:ro
+    networks:
+      - emmalou-network
+
+  frontend:
+    build:
+      context: https://github.com/valianktni1/studioapp.uk.git#main:frontend
+      args:
+        - REACT_APP_BACKEND_URL=
+    container_name: emmalou-frontend
+    restart: unless-stopped
+    ports:
+      - 30041:80
+    depends_on:
+      - backend
+    networks:
+      - emmalou-network
+
+networks:
+  emmalou-network:

@@ -1,0 +1,87 @@
+# ============================================================================
+# Dockge stack — CUSTOMER: Ben Parry Photography
+# Subdomain: benparry.studioapp.uk  (your TrueNAS reverse proxy -> host port 30040)
+# ----------------------------------------------------------------------------
+# Per-customer data layout on TrueNAS:
+#   App/DB data : /mnt/apps/multiple_photographers_app/ben_parry_photography
+#   User files  : /mnt/photographers_data/photographers_upload_data/ben_parry_photography
+#
+# To add another customer: copy this file, then change EVERYTHING marked  <<<<<
+#   - the two storage paths (named after the studio)
+#   - container_name prefix, network name, DB_NAME
+#   - the host port (30040 -> 30041, 30042, ...)
+#   - JWT_SECRET, NGINX_VIDEO_SECRET, SUPERADMIN_PASSWORD (generate fresh!)
+# ============================================================================
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: benparry-mongodb                                   # <<<<<
+    restart: unless-stopped
+    volumes:
+      - /mnt/apps/multiple_photographers_app/ben_parry_photography/mongodb:/data/db   # <<<<<
+    networks:
+      - benparry-network                                               # <<<<<
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build:
+      context: https://github.com/valianktni1/studioapp.uk.git#main:backend   # <<<<< (your new white-label repo)
+    container_name: benparry-backend                                   # <<<<<
+    restart: unless-stopped
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128                        # AMD 780M VAAPI passthrough
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=ben_parry_photography                                  # <<<<<
+      - CORS_ORIGINS=*
+      - UPLOAD_DIR=/data/userfiles
+      - NGINX_VIDEO_URL=enabled
+      # --- secrets: UNIQUE per customer (generate: openssl rand -base64 32) ---
+      - JWT_SECRET=70DHMyqV+7EltCNNz45yn0l1dVKn1rmvCRHlvQXMsKU=        # <<<<<
+      - NGINX_VIDEO_SECRET=PqVd4h/U7cNXGs1sJU3Z5LmrA6pYKxqhIjRCzisvFmA=  # <<<<<
+      # --- Super Admin (platform owner = YOU) for this customer's stack ---
+      - SUPERADMIN_USERNAME=superadmin
+      - SUPERADMIN_PASSWORD=ABf37_jPCsF8oY1Q                            # <<<<<
+    volumes:
+      - /mnt/photographers_data/photographers_upload_data/ben_parry_photography:/data/userfiles   # <<<<<
+      - /mnt/photographers_data/photographers_backup/ben_parry_photography:/backup                # <<<<<
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - benparry-network                                               # <<<<<
+
+  nginx-video:
+    build:
+      context: https://github.com/valianktni1/studioapp.uk.git#main:nginx     # <<<<<
+    container_name: benparry-nginx-video                               # <<<<<
+    restart: unless-stopped
+    environment:
+      - NGINX_VIDEO_SECRET=PqVd4h/U7cNXGs1sJU3Z5LmrA6pYKxqhIjRCzisvFmA=  # <<<<< (must match backend)
+    volumes:
+      - /mnt/photographers_data/photographers_upload_data/ben_parry_photography:/uploads:ro       # <<<<<
+    networks:
+      - benparry-network                                               # <<<<<
+
+  frontend:
+    build:
+      context: https://github.com/valianktni1/studioapp.uk.git#main:frontend  # <<<<<
+      args:
+        - REACT_APP_BACKEND_URL=     # empty = same-origin; frontend nginx proxies /api -> backend
+    container_name: benparry-frontend                                  # <<<<<
+    restart: unless-stopped
+    ports:
+      - 30040:80                                                       # <<<<< host port -> benparry.studioapp.uk
+    depends_on:
+      - backend
+    networks:
+      - benparry-network                                               # <<<<<
+
+networks:
+  benparry-network:                                                    # <<<<<
