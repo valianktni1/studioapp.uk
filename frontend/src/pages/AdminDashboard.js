@@ -17,12 +17,12 @@ import {
 import {
   listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, runBackup, getAllGalleriesStats
 } from "@/lib/api";
-import { useBranding } from "@/lib/branding";
+import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { branding, logoSrc } = useBranding();
+  const { branding } = useBranding();
   const [galleries, setGalleries] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [galleriesStats, setGalleriesStats] = useState({});
@@ -135,8 +135,8 @@ export default function AdminDashboard() {
       <header className="sticky top-0 z-40 border-b" style={{ backgroundColor: 'rgba(253,252,248,0.85)', backdropFilter: 'blur(16px)', borderColor: 'rgba(var(--brand-rgb),0.15)' }}>
         <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoSrc} alt={branding.business_name} className="h-8" style={{ filter: branding.has_custom_logo ? 'none' : 'invert(1)' }} />
-            <span className="text-lg font-medium hidden sm:inline" style={{ fontFamily: 'Cormorant Garamond, serif', color: '#1C1917' }} data-testid="dashboard-business-name">{branding.business_name}</span>
+            <BrandMark heightClass="h-8" textClass="text-2xl" />
+            <span className="sr-only" data-testid="dashboard-business-name">{branding.business_name}</span>
           </div>
           <div className="flex items-center gap-2">
             <Button data-testid="backup-btn" variant="ghost" onClick={handleBackup} disabled={backingUp} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">

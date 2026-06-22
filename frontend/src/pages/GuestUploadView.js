@@ -7,13 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Upload, Camera, Check, Heart, Image as ImageIcon, Film } from "lucide-react";
 import { guestUpload, getGuestUploadCount, trackGalleryView, getErrorMessage } from "@/lib/api";
-import { useBranding } from "@/lib/branding";
+import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
 
 export default function GuestUploadView({ galleryName }) {
   const { token } = useParams();
   const navigate = useNavigate();
-  const { branding, logoSrc } = useBranding();
   const fileInputRef = useRef(null);
   
   const [uploading, setUploading] = useState(false);
@@ -141,7 +140,7 @@ export default function GuestUploadView({ galleryName }) {
       {/* Header */}
       <header className="border-b" style={{ borderColor: 'rgba(var(--brand-rgb),0.15)' }}>
         <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-center">
-          <img src={logoSrc} alt={branding.business_name} className="h-8" style={{ filter: branding.has_custom_logo ? 'none' : 'invert(1)' }} />
+          <BrandMark heightClass="h-8" textClass="text-2xl" />
         </div>
       </header>
 

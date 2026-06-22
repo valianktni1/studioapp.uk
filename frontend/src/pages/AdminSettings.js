@@ -21,12 +21,12 @@ import {
   get2FAStatus, setup2FA, enable2FA, disable2FA,
   getSettings, updateSettings, uploadLogo, deleteLogo
 } from "@/lib/api";
-import { useBranding } from "@/lib/branding";
+import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
 
 export default function AdminSettings() {
   const navigate = useNavigate();
-  const { logoSrc, branding, refresh } = useBranding();
+  const { refresh } = useBranding();
   const [activeTab, setActiveTab] = useState("branding");
 
   // White-label branding
@@ -413,9 +413,8 @@ export default function AdminSettings() {
                     Used on the login page, gallery headers and as the watermark on client photos. PNG with transparency recommended.
                   </p>
                   <div className="flex items-center gap-6">
-                    <div className="w-40 h-24 flex items-center justify-center rounded-sm border" style={{ borderColor: 'rgba(var(--brand-rgb),0.2)', backgroundColor: '#1C1917' }}>
-                      <img src={logoSrc} alt={brandingForm.business_name || "logo"} data-testid="branding-logo-preview"
-                        className="max-h-16 max-w-[140px] object-contain" style={{ filter: hasCustomLogo ? 'none' : 'invert(1)' }} />
+                    <div className="w-40 h-24 flex items-center justify-center rounded-sm border px-3 text-center" style={{ borderColor: 'rgba(var(--brand-rgb),0.2)', backgroundColor: '#1C1917' }}>
+                      <BrandMark heightClass="max-h-16" textClass="text-xl" color="#FFFFFF" imgStyle={{ maxWidth: '140px' }} />
                     </div>
                     <div className="flex flex-col gap-2">
                       <label className="inline-flex items-center gap-2 cursor-pointer bg-[#1C1917] text-[#FDFCF8] rounded-sm px-4 py-2 text-xs tracking-wider uppercase font-bold w-fit">

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Camera, Lock, User, Eye, EyeOff, Upload } from "lucide-react";
 import { checkSetup, setupAdmin, loginAdmin, uploadLogo } from "@/lib/api";
-import { useBranding } from "@/lib/branding";
+import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
 
 // Check if JWT token is expired
@@ -22,7 +22,7 @@ function isTokenExpired(token) {
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { branding, logoSrc, refresh } = useBranding();
+  const { refresh } = useBranding();
   const [isSetup, setIsSetup] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -146,7 +146,7 @@ export default function AdminLogin() {
           className="w-full max-w-md"
         >
           <div className="flex items-center gap-3 mb-16">
-            <img src={logoSrc} alt={branding.business_name} className="h-10" style={{ filter: branding.has_custom_logo ? 'none' : 'invert(1)' }} />
+            <BrandMark heightClass="h-10" textClass="text-3xl" />
           </div>
 
           <h2

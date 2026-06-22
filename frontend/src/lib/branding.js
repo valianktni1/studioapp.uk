@@ -67,3 +67,29 @@ export function BrandingProvider({ children }) {
 export function useBranding() {
   return useContext(BrandingContext);
 }
+
+// Renders the uploaded logo when present, otherwise a neutral text wordmark of the
+// business name — so the original "Weddings By Mark" asset never leaks to white-label tenants.
+export function BrandMark({ heightClass = "h-8", textClass = "text-2xl", color, className = "", imgStyle }) {
+  const { branding, logoSrc } = useBranding();
+  if (branding.has_custom_logo) {
+    return (
+      <img
+        src={logoSrc}
+        alt={branding.business_name}
+        data-testid="brand-logo"
+        className={`${heightClass} object-contain ${className}`}
+        style={imgStyle}
+      />
+    );
+  }
+  return (
+    <span
+      data-testid="brand-wordmark"
+      className={`font-medium leading-none ${textClass} ${className}`}
+      style={{ fontFamily: "Cormorant Garamond, serif", color: color || "#1C1917", letterSpacing: "0.02em" }}
+    >
+      {branding.business_name}
+    </span>
+  );
+}

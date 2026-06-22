@@ -18,7 +18,7 @@ import {
 import GuestUploadView from "@/pages/GuestUploadView";
 import Slideshow from "@/pages/Slideshow";
 import VideoPlayer from "@/components/VideoPlayer";
-import { useBranding } from "@/lib/branding";
+import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
 
 export default function ShareView() {
@@ -41,7 +41,7 @@ function ShareViewFull() {
   const { token } = useParams();
   const navigate = useNavigate();
   const { branding, logoSrc } = useBranding();
-  const watermarkSrc = branding.has_custom_logo ? logoSrc : "/watermark-logo.png";
+  const watermarkSrc = branding.has_custom_logo ? logoSrc : null;
   const fileInputRef = useRef(null);
   const guestInputRef = useRef(null);
 
@@ -350,7 +350,7 @@ function ShareViewFull() {
         <header className={heroImageUrl ? 'absolute top-0 left-0 right-0 z-20' : 'border-b'} style={heroImageUrl ? {} : { borderColor: darkMode ? '#333' : 'rgba(var(--brand-rgb),0.15)' }}>
           <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src={logoSrc} alt={branding.business_name} className="h-8" style={{ filter: branding.has_custom_logo ? 'none' : ((heroImageUrl || darkMode) ? 'brightness(0) invert(1)' : 'invert(1)') }} />
+              <BrandMark heightClass="h-8" textClass="text-2xl" color={(heroImageUrl || darkMode) ? '#FFFFFF' : '#1C1917'} />
             </div>
             <div className="flex items-center gap-3">
               {/* Dark mode toggle */}
@@ -659,7 +659,7 @@ function ShareViewFull() {
                 <FileCard key={file.id} file={file} index={i} galleryId={galleryId}
                   onFav={handleFavourite} onDownload={handleDownloadSingle}
                   onClick={() => setLightboxIndex(i)} permissions={permissions} theme={t}
-                  downloadProgress={downloadProgress} watermarkSrc={watermarkSrc} />
+                  downloadProgress={downloadProgress} watermarkSrc={watermarkSrc} watermarkText={branding.business_name} />
               ))}
             </div>
           )}
@@ -667,8 +667,8 @@ function ShareViewFull() {
         <Lightbox currentPhoto={currentPhoto} lightboxIndex={lightboxIndex} total={displayFiles.length}
           setLightboxIndex={setLightboxIndex} goNext={goNext} goPrev={goPrev}
           galleryId={galleryId} onFav={handleFavourite} onDownload={handleDownloadSingle} permissions={permissions} shareToken={token}
-          downloadProgress={downloadProgress} watermarkSrc={watermarkSrc} />
-        <ThankYouModal show={showThankYou} onClose={() => setShowThankYou(false)} count={submittedCount} galleryName={galleryName} theme={t} />
+          downloadProgress={downloadProgress} watermarkSrc={watermarkSrc} watermarkText={branding.business_name} />
+        <ThankYouModal show={showThankYou} onClose={() => setShowThankYou(false)} count={submittedCount} galleryName={galleryName} theme={t} contactEmail={branding.contact_email} />
       </div>
     );
   }
@@ -764,7 +764,7 @@ function ShareViewFull() {
                 permissions={permissions}
                 selectMode={selectMode}
                 isSelected={selectedFiles.has(file.id)} theme={t}
-                downloadProgress={downloadProgress} watermarkSrc={watermarkSrc} />
+                downloadProgress={downloadProgress} watermarkSrc={watermarkSrc} watermarkText={branding.business_name} />
             ))}
           </div>
         )}
@@ -835,7 +835,7 @@ function ShareViewFull() {
 }
 
 // ─── Reusable Components ───
-function FileCard({ file, index, galleryId, onFav, onDownload, onClick, permissions = {}, selectMode = false, isSelected = false, theme = {}, downloadProgress = null, watermarkSrc = "/watermark-logo.png" }) {
+function FileCard({ file, index, galleryId, onFav, onDownload, onClick, permissions = {}, selectMode = false, isSelected = false, theme = {}, downloadProgress = null, watermarkSrc = null, watermarkText = "" }) {
   const emptyColor = theme.textSub || '#A8A29E';
   const mutedColor = theme.textMuted || '#C4C0B8';
   const isDownloading = downloadProgress && downloadProgress.fileId === file.id;
@@ -852,8 +852,12 @@ function FileCard({ file, index, galleryId, onFav, onDownload, onClick, permissi
         file.has_preview ? (
           <div className="relative">
             <img src={previewUrl(galleryId, file.subfolder || file._subfolder, file.filename)} alt={file.filename} className="w-full block" loading="lazy" />
-            <img src={watermarkSrc} alt="" className="absolute pointer-events-none" 
-              style={{ bottom: '10px', right: '10px', width: '80px', opacity: 0.72 }} />
+            {watermarkSrc ? (
+              <img src={watermarkSrc} alt="" className="absolute pointer-events-none" 
+                style={{ bottom: '10px', right: '10px', width: '80px', opacity: 0.72 }} />
+            ) : (
+              <span className="absolute pointer-events-none" style={{ bottom: '8px', right: '12px', opacity: 0.55, color: 'white', fontFamily: 'Cormorant Garamond, serif', fontSize: '13px', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{watermarkText}</span>
+            )}
           </div>
         ) : (
           <div className="aspect-square flex flex-col items-center justify-center file-card-empty">
@@ -933,7 +937,7 @@ function FileCard({ file, index, galleryId, onFav, onDownload, onClick, permissi
   );
 }
 
-function Lightbox({ currentPhoto, lightboxIndex, total, setLightboxIndex, goNext, goPrev, galleryId, onFav, onDownload, permissions = {}, shareToken, downloadProgress, watermarkSrc = "/watermark-logo.png" }) {
+function Lightbox({ currentPhoto, lightboxIndex, total, setLightboxIndex, goNext, goPrev, galleryId, onFav, onDownload, permissions = {}, shareToken, downloadProgress, watermarkSrc = null, watermarkText = "" }) {
   const isVideo = currentPhoto && currentPhoto.file_type === 'video';
   const isDownloading = downloadProgress && currentPhoto && downloadProgress.fileId === currentPhoto.id;
   return (
@@ -993,8 +997,12 @@ function Lightbox({ currentPhoto, lightboxIndex, total, setLightboxIndex, goNext
                 src={galleryId && currentPhoto.has_preview ? previewUrl(galleryId, currentPhoto.subfolder || currentPhoto._subfolder, currentPhoto.filename) : ''}
                 alt={currentPhoto.filename} className="max-w-[90vw] max-h-[85vh] object-contain" />
               {currentPhoto.file_type === 'photo' && (
-                <img src={watermarkSrc} alt="" className="absolute pointer-events-none"
-                  style={{ bottom: '10px', right: '10px', width: '120px', opacity: 0.45 }} />
+                watermarkSrc ? (
+                  <img src={watermarkSrc} alt="" className="absolute pointer-events-none"
+                    style={{ bottom: '10px', right: '10px', width: '120px', opacity: 0.45 }} />
+                ) : (
+                  <span className="absolute pointer-events-none" style={{ bottom: '10px', right: '14px', opacity: 0.4, color: 'white', fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{watermarkText}</span>
+                )
               )}
             </div>
           )}
@@ -1004,7 +1012,7 @@ function Lightbox({ currentPhoto, lightboxIndex, total, setLightboxIndex, goNext
   );
 }
 
-function ThankYouModal({ show, onClose, count, galleryName, theme = {} }) {
+function ThankYouModal({ show, onClose, count, galleryName, theme = {}, contactEmail = "" }) {
   if (!show) return null;
   const bg = theme.bgCard || 'white';
   const heading = theme.headingColor || '#1C1917';
@@ -1038,11 +1046,13 @@ function ThankYouModal({ show, onClose, count, galleryName, theme = {} }) {
           <p className="text-base mb-4" style={{ fontFamily: 'Manrope, sans-serif', color: text }}>
             Your {count} favourite {count === 1 ? 'photo has' : 'photos have'} been submitted for your wedding album.
           </p>
-          <p className="text-sm mb-6 p-3 rounded-lg" style={{ fontFamily: 'Manrope, sans-serif', color: text, backgroundColor: theme.bgAlt || '#FEF9E7' }}>
-            <strong>Guys... please don't forget!</strong><br />
-            Email Mark your chosen image for your front cover at{' '}
-            <a href="mailto:mark@perfectweddingsbymark.uk" className="underline font-medium" style={{ color: 'var(--brand)' }}>mark@perfectweddingsbymark.uk</a>
-          </p>
+          {contactEmail && (
+            <p className="text-sm mb-6 p-3 rounded-lg" style={{ fontFamily: 'Manrope, sans-serif', color: text, backgroundColor: theme.bgAlt || '#FEF9E7' }}>
+              <strong>Please don't forget!</strong><br />
+              Email us your chosen image for your front cover at{' '}
+              <a href={`mailto:${contactEmail}`} className="underline font-medium" style={{ color: 'var(--brand)' }}>{contactEmail}</a>
+            </p>
+          )}
           <button
             onClick={onClose}
             className="px-8 py-3 rounded-sm text-sm font-medium tracking-wider transition-colors"
