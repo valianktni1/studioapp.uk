@@ -42,6 +42,13 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 
+# Super Admin (platform owner) — credentials seeded from environment
+SUPERADMIN_USERNAME = os.environ.get('SUPERADMIN_USERNAME', 'superadmin')
+SUPERADMIN_PASSWORD = os.environ.get('SUPERADMIN_PASSWORD', 'super123')
+
+# In-memory platform state (suspension + storage limit), loaded on startup
+platform_state = {"suspended": False, "suspend_message": "", "storage_limit_bytes": 0}
+
 # Nginx video serving (optional — dramatically improves streaming for multi-GB files)
 NGINX_VIDEO_URL = os.environ.get('NGINX_VIDEO_URL', '')  # set to any value to enable nginx video serving
 NGINX_VIDEO_SECRET = os.environ.get('NGINX_VIDEO_SECRET', JWT_SECRET)  # shared secret with nginx
@@ -206,6 +213,15 @@ async def get_share_session(authorization: str = Header(None)):
     payload = verify_jwt(token)
     if payload.get("role") != "share":
         raise HTTPException(status_code=403, detail="Invalid session")
+    return payload
+
+async def get_super_admin(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.replace("Bearer ", "")
+    payload = verify_jwt(token)
+    if payload.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Super admin access required")
     return payload
 
 # ─── File Helpers ───
@@ -943,6 +959,7 @@ async def upload_files(
         raise HTTPException(status_code=404, detail="Gallery not found")
     if subfolder not in gallery["subfolders"]:
         raise HTTPException(status_code=400, detail=f"Invalid subfolder: {subfolder}")
+    await ensure_storage_available()
 
     target_dir = get_gallery_path(gallery["folder_name"]) / subfolder
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -2294,6 +2311,7 @@ async def guest_upload(
     gallery = await db.galleries.find_one({"id": gallery_id}, {"_id": 0})
     if not gallery:
         raise HTTPException(status_code=404, detail="Gallery not found")
+    await ensure_storage_available()
 
     # Check if this share allows all file types (photographer mode)
     share = await db.shares.find_one({"token": token}, {"_id": 0})
@@ -3024,6 +3042,8 @@ async def build_branding_response():
         "logo_url": logo_url,
         "has_custom_logo": logo_url is not None,
         "platform_credit": PLATFORM_CREDIT,
+        "suspended": platform_state["suspended"],
+        "suspend_message": platform_state["suspend_message"] or "This gallery is temporarily unavailable.",
     }
 
 @api_router.get("/settings")
@@ -3089,6 +3109,148 @@ async def get_branding_logo():
         raise HTTPException(status_code=404, detail="Logo file missing")
     return FileResponse(path)
 
+# ─── Super Admin (Platform Owner) ───
+class SuperAdminLogin(BaseModel):
+    username: str
+    password: str
+
+class StorageLimitUpdate(BaseModel):
+    storage_limit_gb: float  # 0 = unlimited
+
+class SuspendUpdate(BaseModel):
+    message: Optional[str] = None
+
+async def seed_super_admin():
+    """Idempotent: create the super admin from env, or update hash if env password changed."""
+    existing = await db.superadmins.find_one({"username": SUPERADMIN_USERNAME})
+    if existing is None:
+        hashed = bcrypt.hashpw(SUPERADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode()
+        await db.superadmins.insert_one({
+            "id": str(uuid.uuid4()),
+            "username": SUPERADMIN_USERNAME,
+            "password": hashed,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info("Super admin seeded from environment")
+    elif not bcrypt.checkpw(SUPERADMIN_PASSWORD.encode(), existing["password"].encode()):
+        new_hash = bcrypt.hashpw(SUPERADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode()
+        await db.superadmins.update_one({"username": SUPERADMIN_USERNAME}, {"$set": {"password": new_hash}})
+        logger.info("Super admin password updated from environment")
+
+async def load_platform_state():
+    doc = await db.settings.find_one({"key": "platform"}, {"_id": 0}) or {}
+    platform_state["suspended"] = bool(doc.get("suspended", False))
+    platform_state["suspend_message"] = doc.get("suspend_message", "") or ""
+    platform_state["storage_limit_bytes"] = int(doc.get("storage_limit_bytes", 0) or 0)
+
+async def save_platform_state():
+    await db.settings.update_one(
+        {"key": "platform"},
+        {"$set": {"key": "platform", **platform_state}},
+        upsert=True
+    )
+
+async def get_storage_used_bytes() -> int:
+    """Total bytes used by all stored files (from DB file records)."""
+    pipeline = [{"$group": {"_id": None, "total": {"$sum": "$file_size"}}}]
+    res = await db.files.aggregate(pipeline).to_list(1)
+    return int(res[0]["total"]) if res else 0
+
+async def ensure_storage_available(incoming_bytes: int = 0):
+    limit = platform_state["storage_limit_bytes"]
+    if limit and limit > 0:
+        used = await get_storage_used_bytes()
+        if used + incoming_bytes > limit:
+            raise HTTPException(status_code=413, detail="Storage limit reached. Please contact your platform provider.")
+
+@api_router.post("/superadmin/login")
+async def superadmin_login(data: SuperAdminLogin, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    if check_rate_limit(f"super:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in 30 minutes.")
+    sa = await db.superadmins.find_one({"username": data.username}, {"_id": 0})
+    if not sa or not bcrypt.checkpw(data.password.encode(), sa["password"].encode()):
+        record_login_attempt(f"super:{client_ip}")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    clear_login_attempts(f"super:{client_ip}")
+    token = create_jwt({"sub": sa["id"], "role": "superadmin", "username": sa["username"]}, expires_hours=ADMIN_SESSION_HOURS)
+    return {"token": token, "username": sa["username"]}
+
+@api_router.get("/superadmin/account")
+async def superadmin_get_account(superadmin=Depends(get_super_admin)):
+    """Return the customer account in THIS instance (per-stack deployment)."""
+    admin = await db.admins.find_one({}, {"_id": 0, "password": 0, "totp_secret": 0, "totp_secret_pending": 0, "recovery_codes": 0})
+    branding = await build_branding_response()
+    used = await get_storage_used_bytes()
+    gallery_count = await db.galleries.count_documents({})
+    file_count = await db.files.count_documents({})
+    share_count = await db.shares.count_documents({})
+    return {
+        "account_exists": admin is not None,
+        "business_name": branding["business_name"],
+        "admin_username": (admin or {}).get("username"),
+        "created_at": (admin or {}).get("created_at"),
+        "suspended": platform_state["suspended"],
+        "suspend_message": platform_state["suspend_message"],
+        "storage_used_bytes": used,
+        "storage_limit_bytes": platform_state["storage_limit_bytes"],
+        "gallery_count": gallery_count,
+        "file_count": file_count,
+        "share_count": share_count,
+    }
+
+@api_router.post("/superadmin/suspend")
+async def superadmin_suspend(data: SuspendUpdate, superadmin=Depends(get_super_admin)):
+    platform_state["suspended"] = True
+    platform_state["suspend_message"] = data.message or "This gallery is temporarily unavailable."
+    await save_platform_state()
+    return {"suspended": True, "suspend_message": platform_state["suspend_message"]}
+
+@api_router.post("/superadmin/reactivate")
+async def superadmin_reactivate(superadmin=Depends(get_super_admin)):
+    platform_state["suspended"] = False
+    await save_platform_state()
+    return {"suspended": False}
+
+@api_router.put("/superadmin/storage-limit")
+async def superadmin_set_storage_limit(data: StorageLimitUpdate, superadmin=Depends(get_super_admin)):
+    if data.storage_limit_gb < 0:
+        raise HTTPException(status_code=400, detail="Storage limit cannot be negative")
+    platform_state["storage_limit_bytes"] = int(data.storage_limit_gb * 1024 * 1024 * 1024)
+    await save_platform_state()
+    return {"storage_limit_bytes": platform_state["storage_limit_bytes"]}
+
+@api_router.delete("/superadmin/instance")
+async def superadmin_delete_instance(confirm: str = Query(...), superadmin=Depends(get_super_admin)):
+    """Wipe all customer data inside this stack (galleries, files, shares, admin, branding). Irreversible."""
+    if confirm != "DELETE":
+        raise HTTPException(status_code=400, detail="Confirmation required")
+    # Remove all uploaded files on disk
+    for child in UPLOAD_DIR.iterdir():
+        try:
+            if child.name in (".cache", ".branding"):
+                continue
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                child.unlink(missing_ok=True)
+        except Exception as e:
+            logger.error(f"Delete instance: failed to remove {child}: {e}")
+    if CACHE_DIR.exists():
+        shutil.rmtree(CACHE_DIR, ignore_errors=True)
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    for old in BRANDING_DIR.glob("logo.*"):
+        old.unlink(missing_ok=True)
+    # Wipe customer collections (keep superadmins + platform settings)
+    for col in ["admins", "templates", "galleries", "files", "shares", "favourites", "print_sizes", "print_orders", "activity"]:
+        await db[col].delete_many({})
+    await db.settings.delete_many({"key": {"$in": ["branding", "guest_video_compression"]}})
+    # Clear suspension so the fresh instance can be set up again
+    platform_state["suspended"] = False
+    platform_state["suspend_message"] = ""
+    await save_platform_state()
+    return {"success": True, "message": "Instance data wiped. The stack is ready for a new setup."}
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -3098,6 +3260,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from starlette.responses import JSONResponse
+
+# Paths that remain reachable even when the account is suspended
+_SUSPENSION_ALLOWLIST_PREFIXES = ("/api/superadmin", "/api/settings")
+
+@app.middleware("http")
+async def suspension_guard(request: Request, call_next):
+    if platform_state["suspended"]:
+        path = request.url.path
+        if path.startswith("/api/") and not any(path.startswith(p) for p in _SUSPENSION_ALLOWLIST_PREFIXES):
+            return JSONResponse(
+                status_code=423,
+                content={"detail": platform_state["suspend_message"] or "This account is currently suspended."},
+            )
+    return await call_next(request)
+
+@app.on_event("startup")
+async def startup_event():
+    await seed_super_admin()
+    await load_platform_state()
+    logger.info(f"Platform state loaded: suspended={platform_state['suspended']}, storage_limit_bytes={platform_state['storage_limit_bytes']}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -7,10 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Camera, Lock, Heart, Upload, Clock } from "lucide-react";
 import { getShareInfo, accessShare, openAccessShare, getErrorMessage } from "@/lib/api";
 import { PlatformFooter } from "@/components/PlatformFooter";
+import { useBranding } from "@/lib/branding";
+import { SuspendedNotice } from "@/components/SuspendedNotice";
 
 export default function ShareAccess() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const { branding } = useBranding();
   const [searchParams] = useSearchParams();
   const nextDest = searchParams.get('next');
 
@@ -95,6 +98,8 @@ export default function ShareAccess() {
       setLoading(false);
     }
   };
+
+  if (branding.suspended) return <SuspendedNotice />;
 
   if (expired) {
     return (

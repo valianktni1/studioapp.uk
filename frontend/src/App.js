@@ -11,6 +11,8 @@ import ShareAccess from "@/pages/ShareAccess";
 import ShareView from "@/pages/ShareView";
 import SlideshowDirect from "@/pages/SlideshowDirect";
 import PrintShop from "@/pages/PrintShop";
+import SuperAdminLogin from "@/pages/SuperAdminLogin";
+import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
 
 function App() {
   return (
@@ -28,6 +30,8 @@ function App() {
             <Route path="/s/:token/view" element={<ShareView />} />
             <Route path="/s/:token/slideshow" element={<SlideshowDirect />} />
             <Route path="/s/:token/prints" element={<PrintShop />} />
+            <Route path="/superadmin" element={<SuperAdminLogin />} />
+            <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
             <Route path="/" element={<AdminLogin />} />
           </Routes>
         </BrowserRouter>

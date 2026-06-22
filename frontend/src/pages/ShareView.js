@@ -20,9 +20,13 @@ import Slideshow from "@/pages/Slideshow";
 import VideoPlayer from "@/components/VideoPlayer";
 import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
+import { SuspendedNotice } from "@/components/SuspendedNotice";
 
 export default function ShareView() {
   const { token } = useParams();
+  const { branding } = useBranding();
+
+  if (branding.suspended) return <SuspendedNotice />;
 
   // Check if this is Guest Upload Mode
   const isGuestUploadMode = localStorage.getItem(`guest_upload_mode_${token}`) === 'true';

@@ -9,6 +9,7 @@ import { Camera, Lock, User, Eye, EyeOff, Upload } from "lucide-react";
 import { checkSetup, setupAdmin, loginAdmin, uploadLogo } from "@/lib/api";
 import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
+import { SuspendedNotice } from "@/components/SuspendedNotice";
 
 // Check if JWT token is expired
 function isTokenExpired(token) {
@@ -22,7 +23,7 @@ function isTokenExpired(token) {
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { refresh } = useBranding();
+  const { branding, refresh } = useBranding();
   const [isSetup, setIsSetup] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -104,6 +105,7 @@ export default function AdminLogin() {
   };
 
   if (needsSetup === null) return null;
+  if (branding.suspended) return <SuspendedNotice />;
 
   return (
     <div className="min-h-screen flex relative noise-bg" style={{ backgroundColor: '#FDFCF8' }}>

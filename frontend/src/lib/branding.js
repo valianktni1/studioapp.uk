@@ -11,6 +11,8 @@ const DEFAULT_BRANDING = {
   logo_url: null,
   has_custom_logo: false,
   platform_credit: "App designed & hosted by Weddings By Mark",
+  suspended: false,
+  suspend_message: "This gallery is temporarily unavailable.",
 };
 
 const BrandingContext = createContext({

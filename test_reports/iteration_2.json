@@ -1,0 +1,58 @@
+{
+  "summary": "Tested the new super admin platform control panel end-to-end (backend + UI). All requested flows pass: super admin login (success + 401 paths), GET /api/superadmin/account shape & auth guard, storage limit set (5GB & 0=unlimited), full suspend→reactivate cycle (HTTP 423 on /api/admin/check-setup, /api/admin/login, /api/share/*, while /api/settings and /api/superadmin/* stay 200; UI suspended-notice rendered on /admin and /s/<token>), delete-instance API rejection paths (wrong/missing confirm = 400/422, auth required). Customer admin (admin/test123) login + Aurora Studios branding regression all green. White-label leakage fix verified: with no custom logo, login, dashboard and share suspended page render brand-wordmark='Aurora Studios' and brand-logo is NOT in the DOM; the only 'Weddings By Mark' string is the fixed platform-footer credit. DB left in ACTIVE state.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "DELETE /api/superadmin/instance",
+        "issue": "Missing 'confirm' query param returns 422 (FastAPI Pydantic default) instead of the spec's 400. Wrong value (e.g. confirm=delete) correctly returns 400 via the explicit check. Cosmetic; flip Query(...) to Query(None) + manual 400 raise if exact 400 is required."
+      },
+      {
+        "endpoint": "POST /api/superadmin/suspend",
+        "issue": "Request body field is 'message' but GET /api/settings response field is 'suspend_message' — naming mismatch between input and output. Frontend handles it; just a contract inconsistency."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/admin login (AdminLogin.js)",
+        "issues": [
+          "Username / password inputs and the Sign In button have NO data-testid attributes — every other surface in this iteration is fully testid-covered, so adding admin-username / admin-password / admin-login-btn would close the gap and let regression tests cover the customer-admin login form via UI as well."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_superadmin.py",
+    "/app/backend/tests/test_branding.py",
+    "/app/test_reports/pytest/superadmin_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Add data-testid attributes to AdminLogin.js inputs/button for parity with the rest of the app.",
+    "(Optional) Return 400 for missing 'confirm' on DELETE /api/superadmin/instance to match the spec wording.",
+    "(Optional) Align body field naming: accept 'suspend_message' (or rename API response to 'message') so the suspend endpoint contract is symmetric."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 3289 lines — strongly recommend splitting into routers (admin, share, superadmin, branding) and services (ffmpeg, storage, jwt) for maintainability.",
+    "suspension_guard middleware allowlist via prefix tuple is clean and correctly leaves /api/settings + /api/superadmin reachable; super-admin token check uses role='superadmin' in JWT (good separation from customer admin).",
+    "platform_state is an in-process dict persisted via save_platform_state(); fine for single-instance deployment but multiple replicas would diverge — document or move to a single source of truth (Mongo doc) read per-request if scaled.",
+    "DELETE /api/superadmin/instance correctly preserves /uploads/.cache and /uploads/.branding, wipes only customer collections, and clears suspension — clean teardown.",
+    "BrandMark component is a clean fallback (wordmark when has_custom_logo=false) and is the right fix for last iteration's leakage — confirmed in DOM that brand-logo IMG is absent on every public surface when no logo is uploaded."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_superadmin.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 super-admin tests pass; previous 16/16 branding tests still pass)",
+    "frontend": "100% on every flow exercised (super-admin login → dashboard → storage-limit save → suspend → /admin & share suspended-notice → reactivate → customer-admin login form rendered with wordmark)"
+  },
+  "test_credentials": "Super admin: superadmin / super123 (env-seeded). Customer admin: admin / test123 (Aurora Studios, accent #22C55E).",
+  "seed_data_creation": "None. No galleries were created. The only side effect of UI testing is that platform_state.suspend_message is now 'Account temporarily paused — please contact support.' (cosmetic; not visible to anyone while suspended=false). Account is ACTIVE.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "DB state: customer admin (admin/test123, Aurora Studios) + env-seeded superadmin. No galleries, no shares, no files. Account is ACTIVE. UI delete-instance was deliberately NOT executed (API rejection paths covered via test_superadmin.py::TestDeleteInstance instead). Run: pytest /app/backend/tests/test_superadmin.py /app/backend/tests/test_branding.py -v",
+  "rca of the issue": "No outstanding bugs. The two minor backend items (422 vs 400 on missing confirm; suspend body 'message' vs response 'suspend_message') are contract-style issues only, not behavioural defects — flagged for the main agent's optional polish."
+}

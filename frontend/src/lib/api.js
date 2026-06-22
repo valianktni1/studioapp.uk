@@ -18,10 +18,12 @@ export const getErrorMessage = (err, fallback = "An error occurred") => {
 const apiClient = axios.create({ baseURL: API });
 
 apiClient.interceptors.request.use((config) => {
-  // Use share_token for share routes, admin_token for admin routes
+  // Use share_token for share routes, superadmin_token for superadmin routes, admin_token otherwise
   const url = config.url || '';
   let token;
-  if (url.includes('/share/')) {
+  if (url.includes('/superadmin')) {
+    token = localStorage.getItem('superadmin_token');
+  } else if (url.includes('/share/')) {
     token = localStorage.getItem('share_token');
   } else {
     token = localStorage.getItem('admin_token');
@@ -36,7 +38,10 @@ apiClient.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      if (window.location.pathname.startsWith('/admin')) {
+      if (window.location.pathname.startsWith('/superadmin')) {
+        localStorage.removeItem('superadmin_token');
+        window.location.href = '/superadmin';
+      } else if (window.location.pathname.startsWith('/admin')) {
         localStorage.removeItem('admin_token');
         window.location.href = '/admin';
       }
@@ -62,6 +67,14 @@ export const uploadLogo = (file) => {
   });
 };
 export const deleteLogo = () => apiClient.delete('/admin/settings/logo');
+
+// Super Admin (platform owner)
+export const superAdminLogin = (data) => apiClient.post('/superadmin/login', data);
+export const getSuperAdminAccount = () => apiClient.get('/superadmin/account');
+export const suspendAccount = (message) => apiClient.post('/superadmin/suspend', { message });
+export const reactivateAccount = () => apiClient.post('/superadmin/reactivate');
+export const setStorageLimit = (storage_limit_gb) => apiClient.put('/superadmin/storage-limit', { storage_limit_gb });
+export const deleteInstance = () => apiClient.delete('/superadmin/instance?confirm=DELETE');
 
 // 2FA
 export const get2FAStatus = () => apiClient.get('/admin/2fa/status');
