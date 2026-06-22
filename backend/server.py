@@ -3221,7 +3221,7 @@ async def superadmin_set_storage_limit(data: StorageLimitUpdate, superadmin=Depe
     return {"storage_limit_bytes": platform_state["storage_limit_bytes"]}
 
 @api_router.delete("/superadmin/instance")
-async def superadmin_delete_instance(confirm: str = Query(...), superadmin=Depends(get_super_admin)):
+async def superadmin_delete_instance(confirm: str = Query(None), superadmin=Depends(get_super_admin)):
     """Wipe all customer data inside this stack (galleries, files, shares, admin, branding). Irreversible."""
     if confirm != "DELETE":
         raise HTTPException(status_code=400, detail="Confirmation required")

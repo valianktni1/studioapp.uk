@@ -46,6 +46,9 @@ services:
       - CORS_ORIGINS=*
       - JWT_SECRET=${JWT_SECRET:-please-change-this-secret-key-to-something-secure}
       - UPLOAD_DIR=/data/userfiles
+      # Super Admin (platform owner) — set unique per-customer stack
+      - SUPERADMIN_USERNAME=${SUPERADMIN_USERNAME:-superadmin}
+      - SUPERADMIN_PASSWORD=${SUPERADMIN_PASSWORD:-please-change-this-superadmin-password}
     volumes:
       # User files (photos, videos) - your SMB-accessible storage
       - /mnt/nextcloud/newwedidngsbymarkuserfiles:/data/userfiles

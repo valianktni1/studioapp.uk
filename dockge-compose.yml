@@ -48,6 +48,9 @@ services:
       # IMPORTANT: Generate your own secret with: openssl rand -hex 32
       - JWT_SECRET=CHANGE_THIS_TO_YOUR_GENERATED_SECRET_KEY_HERE
       - UPLOAD_DIR=/data/userfiles
+      # Super Admin (platform owner) — set unique values per customer stack
+      - SUPERADMIN_USERNAME=superadmin
+      - SUPERADMIN_PASSWORD=CHANGE_THIS_SUPERADMIN_PASSWORD
     volumes:
       # User files (photos, videos) - SMB accessible storage
       - /mnt/nextcloud/newwedidngsbymarkuserfiles:/data/userfiles
