@@ -75,6 +75,8 @@ export const suspendAccount = (message) => apiClient.post('/superadmin/suspend',
 export const reactivateAccount = () => apiClient.post('/superadmin/reactivate');
 export const setStorageLimit = (storage_limit_gb) => apiClient.put('/superadmin/storage-limit', { storage_limit_gb });
 export const deleteInstance = () => apiClient.delete('/superadmin/instance?confirm=DELETE');
+export const createCustomerAccount = (data) => apiClient.post('/superadmin/create-account', data);
+export const resetAdminPassword = (password) => apiClient.post('/superadmin/reset-admin-password', { password });
 
 // 2FA
 export const get2FAStatus = () => apiClient.get('/admin/2fa/status');

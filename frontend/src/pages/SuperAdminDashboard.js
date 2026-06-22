@@ -10,10 +10,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import {
-  ShieldCheck, LogOut, HardDrive, Pause, Play, Trash2, Building2, Images, Files, Share2, AlertTriangle
+  ShieldCheck, LogOut, HardDrive, Pause, Play, Trash2, Building2, Images, Files, Share2, AlertTriangle, UserPlus, KeyRound
 } from "lucide-react";
 import {
-  getSuperAdminAccount, suspendAccount, reactivateAccount, setStorageLimit, deleteInstance
+  getSuperAdminAccount, suspendAccount, reactivateAccount, setStorageLimit, deleteInstance,
+  createCustomerAccount, resetAdminPassword
 } from "@/lib/api";
 
 const GB = 1024 * 1024 * 1024;
@@ -33,6 +34,8 @@ export default function SuperAdminDashboard() {
   const [limitGb, setLimitGb] = useState("");
   const [showDelete, setShowDelete] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [createForm, setCreateForm] = useState({ business_name: "", username: "", password: "", accent_color: "#D4AF37" });
+  const [resetPw, setResetPw] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +84,32 @@ export default function SuperAdminDashboard() {
   };
   const logout = () => { localStorage.removeItem("superadmin_token"); navigate("/superadmin"); };
 
+  const handleCreate = async () => {
+    if (!createForm.business_name.trim() || !createForm.username.trim() || !createForm.password) {
+      toast.error("Business name, username and password are required"); return;
+    }
+    if (createForm.password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    setBusy(true);
+    try {
+      await createCustomerAccount(createForm);
+      toast.success("Customer account created");
+      setCreateForm({ business_name: "", username: "", password: "", accent_color: "#D4AF37" });
+      load();
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed to create account"); }
+    finally { setBusy(false); }
+  };
+
+  const handleResetPw = async () => {
+    if (resetPw.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    setBusy(true);
+    try {
+      await resetAdminPassword(resetPw);
+      toast.success("Photographer password reset");
+      setResetPw("");
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed to reset password"); }
+    finally { setBusy(false); }
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#0F0F12" }}>
       <div className="w-8 h-8 border-2 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
@@ -111,6 +140,55 @@ export default function SuperAdminDashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10 space-y-6">
+        {/* Create customer account (shown when no photographer account exists yet) */}
+        {!account?.account_exists && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="rounded-lg border p-6" style={{ borderColor: "#2A2240", backgroundColor: "#16161B" }}
+            data-testid="create-account-card">
+            <div className="flex items-center gap-2 mb-2">
+              <UserPlus className="w-5 h-5" style={{ color: "#7C3AED" }} />
+              <h3 className="text-lg font-medium" style={{ fontFamily: "Cormorant Garamond, serif" }}>Create Customer Account</h3>
+            </div>
+            <p className="text-sm mb-5" style={{ color: "#8B8B94" }}>
+              No photographer account exists on this stack yet. Create one for your paying customer — they’ll log in at <strong>/admin</strong> with these credentials. Self-service signup is disabled.
+            </p>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs tracking-[0.1em] uppercase" style={{ color: "#8B8B94" }}>Business Name</Label>
+                <Input data-testid="create-business-name" value={createForm.business_name}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, business_name: e.target.value }))}
+                  placeholder="Ben Parry Photography" className="bg-transparent border-[#2A2A30] text-white rounded-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs tracking-[0.1em] uppercase" style={{ color: "#8B8B94" }}>Accent Colour</Label>
+                <div className="flex items-center gap-2">
+                  <input data-testid="create-accent-color" type="color" value={createForm.accent_color}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, accent_color: e.target.value }))}
+                    className="h-10 w-12 rounded-sm border border-[#2A2A30] cursor-pointer bg-transparent" />
+                  <span className="text-sm font-mono" style={{ color: "#8B8B94" }}>{createForm.accent_color}</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs tracking-[0.1em] uppercase" style={{ color: "#8B8B94" }}>Login Username</Label>
+                <Input data-testid="create-username" value={createForm.username}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))}
+                  placeholder="benparry" className="bg-transparent border-[#2A2A30] text-white rounded-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs tracking-[0.1em] uppercase" style={{ color: "#8B8B94" }}>Login Password</Label>
+                <Input data-testid="create-password" type="text" value={createForm.password}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))}
+                  placeholder="min 6 characters" className="bg-transparent border-[#2A2A30] text-white rounded-sm" />
+              </div>
+            </div>
+            <Button data-testid="create-account-btn" onClick={handleCreate} disabled={busy}
+              className="mt-5 rounded-sm text-xs tracking-wider uppercase font-bold gap-2 text-white" style={{ backgroundColor: "#7C3AED" }}>
+              <UserPlus className="w-4 h-4" /> Create Account
+            </Button>
+          </motion.div>
+        )}
+
+        {account?.account_exists && (<>
         {/* Account summary */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-lg border p-6" style={{ borderColor: "#1F1F25", backgroundColor: "#16161B" }}
@@ -207,6 +285,28 @@ export default function SuperAdminDashboard() {
           )}
         </div>
 
+        {/* Reset photographer password */}
+        <div className="rounded-lg border p-6" style={{ borderColor: "#1F1F25", backgroundColor: "#16161B" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <KeyRound className="w-5 h-5" style={{ color: "#7C3AED" }} />
+            <h3 className="text-lg font-medium" style={{ fontFamily: "Cormorant Garamond, serif" }}>Reset Photographer Password</h3>
+          </div>
+          <p className="text-sm mb-4" style={{ color: "#8B8B94" }}>
+            Set a new login password for {account?.business_name} (username: {account?.admin_username || "—"}) if they’re locked out.
+          </p>
+          <div className="flex items-end gap-3">
+            <div className="space-y-1.5 flex-1 max-w-xs">
+              <Label className="text-xs tracking-[0.1em] uppercase" style={{ color: "#8B8B94" }}>New password (min 6)</Label>
+              <Input data-testid="reset-password-input" type="text" value={resetPw} onChange={(e) => setResetPw(e.target.value)}
+                className="bg-transparent border-[#2A2A30] text-white rounded-sm" />
+            </div>
+            <Button data-testid="reset-password-btn" onClick={handleResetPw} disabled={busy}
+              className="rounded-sm text-xs tracking-wider uppercase font-bold text-white" style={{ backgroundColor: "#7C3AED" }}>
+              Reset Password
+            </Button>
+          </div>
+        </div>
+
         {/* Danger zone */}
         <div className="rounded-lg border p-6" style={{ borderColor: "rgba(239,68,68,0.3)", backgroundColor: "#1A1012" }}>
           <div className="flex items-center gap-2 mb-2">
@@ -221,6 +321,7 @@ export default function SuperAdminDashboard() {
             <Trash2 className="w-4 h-4" /> Delete Instance Data
           </Button>
         </div>
+        </>)}
       </main>
 
       <AlertDialog open={showDelete} onOpenChange={(o) => { setShowDelete(o); if (!o) setDeleteConfirm(""); }}>

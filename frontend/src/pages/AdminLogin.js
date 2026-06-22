@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Camera, Lock, User, Eye, EyeOff, Upload } from "lucide-react";
-import { checkSetup, setupAdmin, loginAdmin, uploadLogo } from "@/lib/api";
+import { Camera, Lock, User, Eye, EyeOff } from "lucide-react";
+import { checkSetup, loginAdmin } from "@/lib/api";
 import { useBranding, BrandMark } from "@/lib/branding";
 import { PlatformFooter } from "@/components/PlatformFooter";
 import { SuspendedNotice } from "@/components/SuspendedNotice";
@@ -23,23 +23,14 @@ function isTokenExpired(token) {
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { branding, refresh } = useBranding();
+  const { branding } = useBranding();
   const [isSetup, setIsSetup] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [needs2FA, setNeeds2FA] = useState(false);
   const [totpCode, setTotpCode] = useState("");
-  const [logoFile, setLogoFile] = useState(null);
-  const [logoPreview, setLogoPreview] = useState(null);
-  const [form, setForm] = useState({ username: "", password: "", business_name: "", accent_color: "#D4AF37" });
-
-  const handleLogoSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
-  };
+  const [form, setForm] = useState({ username: "", password: "" });
 
   useEffect(() => {
     const token = localStorage.getItem("admin_token");
@@ -60,24 +51,11 @@ export default function AdminLogin() {
     e.preventDefault();
     setLoading(true);
     try {
-      let res;
-      if (needsSetup) {
-        res = await setupAdmin(form);
-        localStorage.setItem("admin_token", res.data.token);
-        if (logoFile) {
-          try { await uploadLogo(logoFile); } catch { /* non-blocking */ }
-        }
-        await refresh();
-        toast.success("Welcome back");
-        navigate("/admin/dashboard");
-        return;
-      } else {
-        res = await loginAdmin({ 
-          username: form.username, 
-          password: form.password,
-          totp_code: needs2FA ? totpCode : undefined
-        });
-      }
+      const res = await loginAdmin({ 
+        username: form.username, 
+        password: form.password,
+        totp_code: needs2FA ? totpCode : undefined
+      });
       
       // Check if 2FA is required
       if (res.data.requires_2fa) {
@@ -106,6 +84,26 @@ export default function AdminLogin() {
 
   if (needsSetup === null) return null;
   if (branding.suspended) return <SuspendedNotice />;
+
+  if (needsSetup) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 noise-bg" style={{ backgroundColor: '#FDFCF8' }} data-testid="not-activated-notice">
+        <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md">
+          <div className="mb-8"><BrandMark heightClass="h-12" textClass="text-4xl" /></div>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mb-6" style={{ backgroundColor: 'rgba(var(--brand-rgb),0.12)' }}>
+            <Lock className="w-7 h-7" style={{ color: 'var(--brand)' }} />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-light italic mb-4" style={{ fontFamily: 'Cormorant Garamond, serif', color: '#1C1917' }}>
+            Not Activated Yet
+          </h1>
+          <p className="text-base" style={{ color: '#57534E', fontFamily: 'Manrope, sans-serif' }}>
+            This gallery hasn't been activated yet. Please contact your provider to set up your account.
+          </p>
+        </div>
+        <PlatformFooter />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex relative noise-bg" style={{ backgroundColor: '#FDFCF8' }}>
@@ -155,14 +153,12 @@ export default function AdminLogin() {
             className="text-4xl md:text-5xl mb-3 font-medium"
             style={{ fontFamily: 'Cormorant Garamond, serif' }}
           >
-            {needs2FA ? "Verification" : needsSetup ? "Set Up" : "Sign In"}
+            {needs2FA ? "Verification" : "Sign In"}
           </h2>
           <p className="text-base mb-12" style={{ color: '#57534E', fontFamily: 'Manrope, sans-serif' }}>
             {needs2FA 
               ? "Enter the 6-digit code from your Google Authenticator app" 
-              : needsSetup 
-                ? "Create your admin account to get started" 
-                : "Enter your credentials to continue"}
+              : "Enter your credentials to continue"}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-8">
@@ -218,58 +214,6 @@ export default function AdminLogin() {
             ) : (
               /* Normal Login Form */
               <>
-            {needsSetup && (
-              <div className="space-y-2">
-                <Label className="text-xs tracking-[0.15em] uppercase font-semibold" style={{ color: '#57534E' }}>
-                  Business Name
-                </Label>
-                <Input
-                  data-testid="setup-business-name"
-                  value={form.business_name}
-                  onChange={e => setForm(f => ({...f, business_name: e.target.value}))}
-                  className="border-0 border-b border-[#D4D4D8] bg-transparent rounded-none px-0 py-3 focus-visible:ring-0 focus-visible:border-[#1C1917] placeholder:text-[#A8A29E] text-base"
-                  style={{ fontFamily: 'Manrope, sans-serif' }}
-                  placeholder="Your studio / business name"
-                  required
-                />
-              </div>
-            )}
-
-            {needsSetup && (
-              <div className="grid grid-cols-2 gap-4 items-end">
-                <div className="space-y-2">
-                  <Label className="text-xs tracking-[0.15em] uppercase font-semibold" style={{ color: '#57534E' }}>
-                    Accent Colour
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      data-testid="setup-accent-color"
-                      type="color"
-                      value={form.accent_color}
-                      onChange={e => setForm(f => ({...f, accent_color: e.target.value}))}
-                      className="h-10 w-12 rounded-sm border border-[#D4D4D8] cursor-pointer bg-transparent"
-                    />
-                    <span className="text-sm font-mono" style={{ color: '#57534E' }}>{form.accent_color}</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs tracking-[0.15em] uppercase font-semibold" style={{ color: '#57534E' }}>
-                    Logo (optional)
-                  </Label>
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-[#57534E] hover:text-[#1C1917] border-b border-[#D4D4D8] py-2.5" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                    {logoPreview ? (
-                      <img src={logoPreview} alt="logo preview" className="h-6 max-w-[120px] object-contain" />
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4" /> Upload logo
-                      </>
-                    )}
-                    <input data-testid="setup-logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoSelect} />
-                  </label>
-                </div>
-              </div>
-            )}
-
             <div className="space-y-2">
               <Label className="text-xs tracking-[0.15em] uppercase font-semibold" style={{ color: '#57534E' }}>
                 Username
@@ -322,7 +266,7 @@ export default function AdminLogin() {
               className="w-full bg-[#1C1917] text-[#FDFCF8] hover:bg-[#1C1917]/90 rounded-sm px-8 py-6 text-xs tracking-[0.2em] uppercase font-bold"
               style={{ transition: 'background-color 0.3s ease, transform 0.2s ease', fontFamily: 'Manrope, sans-serif' }}
             >
-              {loading ? "Please wait..." : (needsSetup ? "Create Account" : "Sign In")}
+              {loading ? "Please wait..." : "Sign In"}
             </Button>
               </>
             )}

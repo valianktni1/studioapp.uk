@@ -557,14 +557,17 @@ async def check_admin_setup():
 
 @api_router.post("/admin/setup")
 async def setup_admin(data: AdminSetup):
+    # Self-service provisioning is disabled — accounts are created by the platform owner (super admin).
+    raise HTTPException(status_code=403, detail="Self-service setup is disabled. Your platform provider will create your account.")
+
+async def provision_customer_admin(username: str, password: str, business_name: str, accent_color: str = None):
     existing = await db.admins.find_one({})
     if existing:
-        raise HTTPException(status_code=400, detail="Admin already setup")
-    business_name = data.business_name or data.display_name
-    hashed = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
+        raise HTTPException(status_code=400, detail="An account already exists for this instance")
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     admin_doc = {
         "id": str(uuid.uuid4()),
-        "username": data.username,
+        "username": username,
         "password": hashed,
         "display_name": business_name,
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -581,11 +584,10 @@ async def setup_admin(data: AdminSetup):
     await db.templates.insert_one(default_template)
     # Create initial white-label branding settings
     branding_doc = {"key": "branding", "business_name": business_name}
-    if data.accent_color:
-        branding_doc["accent_color"] = data.accent_color
+    if accent_color:
+        branding_doc["accent_color"] = accent_color
     await db.settings.update_one({"key": "branding"}, {"$set": branding_doc}, upsert=True)
-    token = create_jwt({"sub": admin_doc["id"], "role": "admin", "username": data.username})
-    return {"token": token, "username": data.username, "display_name": business_name}
+    return admin_doc
 
 @api_router.post("/admin/login")
 async def admin_login(data: AdminLogin, request: Request):
@@ -3120,6 +3122,15 @@ class StorageLimitUpdate(BaseModel):
 class SuspendUpdate(BaseModel):
     message: Optional[str] = None
 
+class CreateAccountRequest(BaseModel):
+    username: str
+    password: str
+    business_name: str
+    accent_color: Optional[str] = None
+
+class ResetAdminPassword(BaseModel):
+    password: str
+
 async def seed_super_admin():
     """Idempotent: create the super admin from env, or update hash if env password changed."""
     existing = await db.superadmins.find_one({"username": SUPERADMIN_USERNAME})
@@ -3211,6 +3222,32 @@ async def superadmin_reactivate(superadmin=Depends(get_super_admin)):
     platform_state["suspended"] = False
     await save_platform_state()
     return {"suspended": False}
+
+@api_router.post("/superadmin/create-account")
+async def superadmin_create_account(data: CreateAccountRequest, superadmin=Depends(get_super_admin)):
+    """Platform owner provisions the single customer (photographer) account for this stack."""
+    if not data.username.strip() or not data.password or not data.business_name.strip():
+        raise HTTPException(status_code=400, detail="Business name, username and password are required")
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if data.accent_color:
+        import re
+        if not re.match(r'^#[0-9A-Fa-f]{6}$', data.accent_color):
+            raise HTTPException(status_code=400, detail="Accent colour must be a valid hex code like #D4AF37")
+    await provision_customer_admin(data.username.strip(), data.password, data.business_name.strip(), data.accent_color)
+    return {"success": True, "message": "Customer account created"}
+
+@api_router.post("/superadmin/reset-admin-password")
+async def superadmin_reset_admin_password(data: ResetAdminPassword, superadmin=Depends(get_super_admin)):
+    """Reset the customer admin's password (e.g. when the photographer is locked out)."""
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    admin = await db.admins.find_one({})
+    if not admin:
+        raise HTTPException(status_code=404, detail="No customer account exists yet")
+    hashed = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
+    await db.admins.update_one({"id": admin["id"]}, {"$set": {"password": hashed}})
+    return {"success": True, "message": "Password reset"}
 
 @api_router.put("/superadmin/storage-limit")
 async def superadmin_set_storage_limit(data: StorageLimitUpdate, superadmin=Depends(get_super_admin)):
