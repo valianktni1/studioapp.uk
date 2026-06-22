@@ -34,7 +34,7 @@ export default function SuperAdminDashboard() {
   const [limitGb, setLimitGb] = useState("");
   const [showDelete, setShowDelete] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
-  const [createForm, setCreateForm] = useState({ business_name: "", username: "", password: "", accent_color: "#D4AF37" });
+  const [createForm, setCreateForm] = useState({ business_name: "", username: "", password: "", email: "", accent_color: "#D4AF37" });
   const [resetPw, setResetPw] = useState("");
 
   const load = useCallback(async () => {
@@ -93,7 +93,7 @@ export default function SuperAdminDashboard() {
     try {
       await createCustomerAccount(createForm);
       toast.success("Customer account created");
-      setCreateForm({ business_name: "", username: "", password: "", accent_color: "#D4AF37" });
+      setCreateForm({ business_name: "", username: "", password: "", email: "", accent_color: "#D4AF37" });
       load();
     } catch (err) { toast.error(err.response?.data?.detail || "Failed to create account"); }
     finally { setBusy(false); }
@@ -173,6 +173,12 @@ export default function SuperAdminDashboard() {
                 <Input data-testid="create-username" value={createForm.username}
                   onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))}
                   placeholder="benparry" className="bg-transparent border-[#2A2A30] text-white rounded-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs tracking-[0.1em] uppercase" style={{ color: "#8B8B94" }}>Email (for password resets)</Label>
+                <Input data-testid="create-email" type="email" value={createForm.email}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="them@studio.com" className="bg-transparent border-[#2A2A30] text-white rounded-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs tracking-[0.1em] uppercase" style={{ color: "#8B8B94" }}>Login Password</Label>

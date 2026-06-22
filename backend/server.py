@@ -100,6 +100,7 @@ class AdminSetup(BaseModel):
     display_name: str = "Weddings By Mark"
     business_name: Optional[str] = None
     accent_color: Optional[str] = None
+    email: Optional[str] = None
 
 class TemplateCreate(BaseModel):
     name: str
@@ -557,10 +558,14 @@ async def check_admin_setup():
 
 @api_router.post("/admin/setup")
 async def setup_admin(data: AdminSetup):
-    # Self-service provisioning is disabled — accounts are created by the platform owner (super admin).
-    raise HTTPException(status_code=403, detail="Self-service setup is disabled. Your platform provider will create your account.")
+    business_name = data.business_name or data.display_name
+    admin_doc = await provision_customer_admin(
+        data.username, data.password, business_name, data.accent_color, email=data.email
+    )
+    token = create_jwt({"sub": admin_doc["id"], "role": "admin", "username": data.username})
+    return {"token": token, "username": data.username, "display_name": business_name}
 
-async def provision_customer_admin(username: str, password: str, business_name: str, accent_color: str = None):
+async def provision_customer_admin(username: str, password: str, business_name: str, accent_color: str = None, email: str = None):
     existing = await db.admins.find_one({})
     if existing:
         raise HTTPException(status_code=400, detail="An account already exists for this instance")
@@ -570,6 +575,7 @@ async def provision_customer_admin(username: str, password: str, business_name: 
         "username": username,
         "password": hashed,
         "display_name": business_name,
+        "email": (email or "").strip().lower(),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.admins.insert_one(admin_doc)
@@ -3010,6 +3016,100 @@ async def toggle_compression(enabled: bool = Query(...), admin=Depends(get_admin
     status = "enabled" if enabled else "disabled"
     return {"success": True, "message": f"Guest video compression {status}", "enabled": enabled}
 
+# ─── Transactional Email (Hostinger SMTP) + Password Reset ───
+import aiosmtplib
+from email.message import EmailMessage
+
+SMTP_HOST = os.environ.get('SMTP_HOST', '')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '465') or '465')
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
+SMTP_FROM = os.environ.get('SMTP_FROM') or SMTP_USER or 'admin@studioapp.uk'
+
+def is_smtp_configured() -> bool:
+    return bool(SMTP_HOST and SMTP_USER and SMTP_PASSWORD)
+
+async def send_email(to_email: str, subject: str, text_content: str, html_content: str):
+    if not is_smtp_configured():
+        logger.warning("SMTP not configured — skipping email send")
+        return False
+    message = EmailMessage()
+    message["From"] = SMTP_FROM
+    message["To"] = to_email
+    message["Subject"] = subject
+    message.set_content(text_content)
+    message.add_alternative(html_content, subtype="html")
+    try:
+        await aiosmtplib.send(
+            message,
+            hostname=SMTP_HOST,
+            port=SMTP_PORT,
+            username=SMTP_USER,
+            password=SMTP_PASSWORD,
+            use_tls=(SMTP_PORT == 465),
+            start_tls=(SMTP_PORT == 587),
+            timeout=20,
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email to {to_email}: {e}")
+        return False
+
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+    origin: Optional[str] = None
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+@api_router.post("/admin/forgot-password")
+async def admin_forgot_password(data: ForgotPasswordRequest, request: Request):
+    generic = {"message": "If that email is on file, a password reset link has been sent."}
+    admin = await db.admins.find_one({"email": data.email.strip().lower()})
+    if not admin:
+        return generic
+    raw_token = secrets.token_urlsafe(32)
+    expiry = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    await db.admins.update_one(
+        {"id": admin["id"]},
+        {"$set": {"reset_token": _hash_token(raw_token), "reset_token_expiry": expiry}}
+    )
+    origin = (data.origin or str(request.base_url)).rstrip("/")
+    reset_link = f"{origin}/admin/reset-password?token={raw_token}"
+    branding = await build_branding_response()
+    biz = branding["business_name"]
+    subject = f"Reset your {biz} gallery password"
+    text = f"Hello,\n\nWe received a request to reset your {biz} admin password.\nUse this link (valid 1 hour):\n{reset_link}\n\nIf you didn't request this, ignore this email."
+    html = f"""<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;color:#1c1917">
+      <h2 style="font-weight:600">{biz}</h2>
+      <p>We received a request to reset your gallery admin password.</p>
+      <p><a href="{reset_link}" style="display:inline-block;background:#1c1917;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none">Set a new password</a></p>
+      <p style="color:#78716c;font-size:13px">This link is valid for 1 hour. If you didn't request this, you can safely ignore this email.</p>
+    </div>"""
+    await send_email(admin["email"], subject, text, html)
+    return generic
+
+@api_router.post("/admin/reset-password")
+async def admin_reset_password(data: ResetPasswordRequest):
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    admin = await db.admins.find_one({"reset_token": _hash_token(data.token)})
+    if not admin:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    expiry = admin.get("reset_token_expiry")
+    if not expiry or datetime.fromisoformat(expiry) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="This reset link has expired")
+    hashed = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.admins.update_one(
+        {"id": admin["id"]},
+        {"$set": {"password": hashed}, "$unset": {"reset_token": "", "reset_token_expiry": ""}}
+    )
+    return {"message": "Password updated successfully. You can now sign in."}
+
 # ─── White-Label Branding Settings ───
 BRANDING_DIR = UPLOAD_DIR / ".branding"
 BRANDING_DIR.mkdir(parents=True, exist_ok=True)
@@ -3127,6 +3227,7 @@ class CreateAccountRequest(BaseModel):
     password: str
     business_name: str
     accent_color: Optional[str] = None
+    email: Optional[str] = None
 
 class ResetAdminPassword(BaseModel):
     password: str
@@ -3234,7 +3335,7 @@ async def superadmin_create_account(data: CreateAccountRequest, superadmin=Depen
         import re
         if not re.match(r'^#[0-9A-Fa-f]{6}$', data.accent_color):
             raise HTTPException(status_code=400, detail="Accent colour must be a valid hex code like #D4AF37")
-    await provision_customer_admin(data.username.strip(), data.password, data.business_name.strip(), data.accent_color)
+    await provision_customer_admin(data.username.strip(), data.password, data.business_name.strip(), data.accent_color, email=data.email)
     return {"success": True, "message": "Customer account created"}
 
 @api_router.post("/superadmin/reset-admin-password")

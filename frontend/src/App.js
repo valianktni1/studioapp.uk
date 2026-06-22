@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { BrandingProvider } from "@/lib/branding";
 import AdminLogin from "@/pages/AdminLogin";
+import ResetPassword from "@/pages/ResetPassword";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminGalleryDetail from "@/pages/AdminGalleryDetail";
 import AdminSettings from "@/pages/AdminSettings";
@@ -21,6 +22,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/admin" element={<AdminLogin />} />
+            <Route path="/admin/reset-password" element={<ResetPassword />} />
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/galleries" element={<AdminDashboard />} />
             <Route path="/admin/gallery/:id" element={<AdminGalleryDetail />} />

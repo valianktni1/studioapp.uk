@@ -48,6 +48,12 @@ services:
       # --- Super Admin (platform owner = YOU) for this customer's stack ---
       - SUPERADMIN_USERNAME=superadmin
       - SUPERADMIN_PASSWORD=ABf37_jPCsF8oY1Q                            # <<<<<
+      # --- Email (Hostinger SMTP) — SAME for every customer stack; fill your mailbox password ---
+      - SMTP_HOST=smtp.hostinger.com
+      - SMTP_PORT=465
+      - SMTP_USER=admin@studioapp.uk
+      - SMTP_PASSWORD=YOUR_HOSTINGER_MAILBOX_PASSWORD                   # <<<<< same across all stacks
+      - SMTP_FROM=StudioApp <admin@studioapp.uk>
     volumes:
       - /mnt/photographers_data/photographers_upload_data/ben_parry_photography:/data/userfiles   # <<<<<
     depends_on:

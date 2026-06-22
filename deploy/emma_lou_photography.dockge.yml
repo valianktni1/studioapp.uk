@@ -38,6 +38,12 @@ services:
       - NGINX_VIDEO_SECRET=14wNf28xQ3/EXshNwpYCsFt3h/hUEBEpGUFkjDdl+X0=
       - SUPERADMIN_USERNAME=superadmin
       - SUPERADMIN_PASSWORD=IjWVoHpdtdZKXUif
+      # --- Email (Hostinger SMTP) — same mailbox password across all stacks ---
+      - SMTP_HOST=smtp.hostinger.com
+      - SMTP_PORT=465
+      - SMTP_USER=admin@studioapp.uk
+      - SMTP_PASSWORD=YOUR_HOSTINGER_MAILBOX_PASSWORD
+      - SMTP_FROM=StudioApp <admin@studioapp.uk>
     volumes:
       - /mnt/photographers_data/photographers_upload_data/emma_lou_photography:/data/userfiles
     depends_on:
